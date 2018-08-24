@@ -21,7 +21,6 @@ import android.view.inputmethod.EditorInfo
 import android.widget.ArrayAdapter
 import android.widget.TextView
 
-import java.util.ArrayList
 import android.Manifest.permission.READ_CONTACTS
 import android.annotation.SuppressLint
 import android.app.Activity
@@ -29,7 +28,13 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
+import android.util.Log
 import android.widget.Button
+import android.widget.LinearLayout
+import com.bumptech.glide.Glide
+import com.facebook.*
+import com.facebook.login.LoginManager
+import com.facebook.login.LoginResult
 import com.google.android.gms.auth.api.Auth
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
@@ -40,9 +45,12 @@ import com.google.android.gms.common.SignInButton
 import com.google.android.gms.common.api.GoogleApiClient
 
 import kotlinx.android.synthetic.main.activity_login.*
+import org.json.JSONObject
+import java.util.*
 
 class LoginActivity : AppCompatActivity(), GoogleApiClient.OnConnectionFailedListener {
 
+    private var callbackManager: CallbackManager? = null
     private val RC_SIGN_IN = 9001
 
     @SuppressLint("SetTextI18n")
@@ -68,8 +76,83 @@ class LoginActivity : AppCompatActivity(), GoogleApiClient.OnConnectionFailedLis
         }
 
 
+        var btnLoginFacebook = findViewById<LinearLayout>(R.id.facebook_in_button)
+
+        btnLoginFacebook.setOnClickListener(View.OnClickListener {
+            // Login
+            callbackManager = CallbackManager.Factory.create()
+            LoginManager.getInstance().logInWithReadPermissions(this, Arrays.asList("public_profile", "email"))
+            LoginManager.getInstance().registerCallback(callbackManager,
+                    object : FacebookCallback<LoginResult> {
+                        override fun onSuccess(loginResult: LoginResult) {
+                            Log.d("MainActivity", "Facebook token: " + loginResult.accessToken.token)
+                            getUserDetails(loginResult)
+
+                        }
+
+                        override fun onCancel() {
+                            Log.d("MainActivity", "Facebook onCancel.")
+
+                        }
+
+                        override fun onError(error: FacebookException) {
+                            Log.d("MainActivity", "Facebook onError.")
+
+                        }
+                    })
+        })
+    }
+
+
+
+    private fun getUserDetails(loginresult: LoginResult){
+
+        val request : GraphRequest = GraphRequest.newMeRequest(loginresult.accessToken, GraphRequest.GraphJSONObjectCallback {
+           obj: JSONObject, response: GraphResponse ->
+
+            println(obj.toString())
+            val image_url : String = "http://graph.facebook.com/" + loginresult.accessToken.userId + "/picture?type=large"
+            Glide.with(applicationContext)
+                    .load(image_url)
+                    .into(imageView)
+
+        })
+        request.executeAsync()
+
+
 
     }
+
+
+ /*
+   val request: GraphRequest = GraphRequest.newMeRequest(result.accessToken, GraphRequest.GraphJSONObjectCallback {
+        obj: JSONObject, response: GraphResponse ->
+        println(obj.toString())
+        println(obj.getString("email"))})
+    request.executeAsync()
+
+
+ protected void getUserDetails(LoginResult loginResult) {
+        GraphRequest data_request = GraphRequest.newMeRequest(
+                loginResult.getAccessToken(), new GraphRequest.GraphJSONObjectCallback() {
+            @Override
+            public void onCompleted(
+                    JSONObject json_object,
+                    GraphResponse response) {
+                Intent intent = new Intent(MainActivity.this, UserProfile.class);
+                intent.putExtra("userProfile", json_object.toString());
+                startActivity(intent);
+            }
+
+        });
+        Bundle permission_param = new Bundle();
+        permission_param.putString("fields", "id,name,email,picture.width(120).height(120)");
+        data_request.setParameters(permission_param);
+        data_request.executeAsync();
+
+    }
+ */
+
 
     override fun onStart() {
         super.onStart()
@@ -94,6 +177,8 @@ class LoginActivity : AppCompatActivity(), GoogleApiClient.OnConnectionFailedLis
             val result: GoogleSignInResult = Auth.GoogleSignInApi.getSignInResultFromIntent(data)
             handleSignInResult(result)
         }
+
+        callbackManager?.onActivityResult(requestCode, resultCode, data)
     }
 
     private fun handleSignInResult(signInResult: GoogleSignInResult) {
